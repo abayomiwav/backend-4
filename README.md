@@ -1,4 +1,4 @@
-# StellarExpress — Backend
+# StellarExpress Backend
 
 The API behind **StellarExpress**, a logistics platform on Stellar. A
 NestJS + GraphQL service over a Postgres/Prisma data layer, with a thin
