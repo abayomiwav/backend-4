@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AssetCode {
+  XLM
+  USDC
+  EURC
+  CUSTOM
+}
+
+enum ShipmentCategory {
+  GENERAL
+  FOOD
+  FRAGILE
+  ELECTRONICS
+  DOCUMENTS
+  FURNITURE
+}
+
+enum ShipmentStatus {
+  OPEN
+  ACCEPTED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  EXPIRED
+  DISPUTED
+  RESOLVED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+}
+
+model User {
+  id                  String   @id @default(cuid())
+  email               String   @unique
+  passwordHash        String?
+  displayName         String
+  stellarPublicKey    String?  @unique
+  isCarrier           Boolean  @default(false)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  sentShipments       Shipment[]      @relation("SentShipments")
+  carriedShipments    Shipment[]      @relation("CarriedShipments")
+  trackingUpdates     TrackingUpdate[]
+  raisedDisputes      Dispute[]       @relation("RaisedDisputes")
+  reviewsGiven        Review[]        @relation("ReviewsGiven")
+  reviewsReceived     Review[]        @relation("ReviewsReceived")
+  carrierProfile      CarrierProfile?
+
+  @@map("users")
+}
+
+model CarrierProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+  vehicleType         String?
+  serviceArea         String?
+  completedDeliveries Int      @default(0)
+  averageRating       Decimal  @default(0) @db.Decimal(3, 2)
+  createdAt           DateTime @default(now())
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("carrier_profiles")
+}
+
+model Shipment {
+  id                      String            @id @default(cuid())
+  contractShipmentId      BigInt?           @unique
+  contractAddress         String?
+  senderId                String
+  carrierId               String?
+  receiverName            String
+  receiverAddress         String
+  originLabel             String
+  destinationLabel        String
+  category                ShipmentCategory  @default(GENERAL)
+  assetCode               AssetCode         @default(USDC)
+  totalAmount             Decimal           @db.Decimal(20, 7)
+  releasedAmount          Decimal           @default(0) @db.Decimal(20, 7)
+  pickupReleaseBps        Int               @default(5000)
+  status                  ShipmentStatus    @default(OPEN)
+  deliveryDeadlineAt      DateTime
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  sender                  User              @relation("SentShipments", fields: [senderId], references: [id])
+  carrier                 User?             @relation("CarriedShipments", fields: [carrierId], references: [id])
+  trackingUpdates         TrackingUpdate[]
+  disputes                Dispute[]
+  reviews                 Review[]
+
+  @@map("shipments")
+}
+
+model TrackingUpdate {
+  id            String   @id @default(cuid())
+  shipmentId    String
+  createdByUserId String?
+  status        String
+  location      String?
+  note          String?
+  createdAt     DateTime @default(now())
+
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  createdBy     User?    @relation(fields: [createdByUserId], references: [id])
+
+  @@map("tracking_updates")
+}
+
+model Dispute {
+  id              String        @id @default(cuid())
+  shipmentId      String
+  raisedByUserId  String
+  reason          String
+  status          DisputeStatus @default(OPEN)
+  resolutionNote  String?
+  senderBps       Int?
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+
+  shipment        Shipment      @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  raisedBy        User          @relation("RaisedDisputes", fields: [raisedByUserId], references: [id])
+
+  @@map("disputes")
+}
+
+model Review {
+  id            String   @id @default(cuid())
+  shipmentId    String
+  fromUserId    String
+  toUserId      String
+  rating        Int
+  comment       String?
+  createdAt     DateTime @default(now())
+
+  shipment      Shipment @relation(fields: [shipmentId], references: [id], onDelete: Cascade)
+  fromUser      User     @relation("ReviewsGiven", fields: [fromUserId], references: [id])
+  toUser        User     @relation("ReviewsReceived", fields: [toUserId], references: [id])
+
+  @@unique([shipmentId, fromUserId])
+  @@map("reviews")
+}

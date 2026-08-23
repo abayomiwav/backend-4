@@ -1,34 +1,18 @@
-# --- Base & Development Stage ---
-FROM node:20-alpine AS development
+FROM node:22-alpine AS build
 WORKDIR /app
-
-# Instalar dependencias completas (incluye devDependencies para nodemon/hot-reload)
 COPY package*.json ./
-RUN npm install --legacy-peer-deps
-
-# Copiar el código fuente
+RUN npm ci
 COPY . .
+RUN npx prisma generate
+RUN npm run build
 
-EXPOSE 4000
-CMD ["npm", "run", "dev"]
-
-# --- Builder Stage para Producción ---
-FROM node:20-alpine AS builder
-WORKDIR /app
-
-COPY package*.json ./
-RUN npm ci --omit=dev
-
-COPY src ./src
-
-# --- Production Stage ---
-FROM node:20-alpine AS production
+FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/src ./src
 COPY package*.json ./
-
+RUN npm ci --omit=dev
+COPY --from=build /app/dist ./dist
+COPY --from=build /app/prisma ./prisma
+COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 4000
-CMD ["node", "src/index.js"]
+CMD ["node", "dist/main.js"]
